@@ -182,12 +182,12 @@ function startHeartbeat(ws: WebSocket, windowId: string): NodeJS.Timeout {
 function handleWSSConnection(ws: WebSocket): void {
   let windowId: string | null = null;
   let hbTimer: NodeJS.Timeout | null = null;
-  let handshaked = false;
 
-  // Send initial handshake probe
+  // Send handshake with service identifier and client type
   sendMessage(ws, {
     type: "handshake",
-    id: randomUUID(),
+    service: SERVICE_ID,
+    clientType: "eda",
     timestamp: Date.now(),
   });
 
@@ -199,36 +199,33 @@ function handleWSSConnection(ws: WebSocket): void {
       return;
     }
 
-    if (!handshaked && msg.type === "handshake") {
-      // Client (EDA) responding with its windowId
-      windowId = msg.id;
+    // EDA registration — responds with type "register" and windowId
+    if (msg.type === "register" && msg.windowId) {
+      windowId = msg.windowId;
       edaClients.set(windowId, ws);
       if (!activeEdaWindowId) activeEdaWindowId = windowId;
       if (hbTimer) clearInterval(hbTimer);
       hbTimer = startHeartbeat(ws, windowId);
-      handshaked = true;
       return;
     }
 
-    switch (msg.type) {
-      case "result":
-      case "error": {
-        const pending = pendingRequests.get(msg.id);
-        if (pending) {
-          clearTimeout(pending.timer);
-          pendingRequests.delete(msg.id);
-          if (msg.type === "error") {
-            pending.reject(new Error(msg.error ?? "Unknown EDA error"));
-          } else {
-            pending.resolve(msg.result);
-          }
+    // Result or error from EDA
+    if (msg.type === "result" || msg.type === "error") {
+      const pending = pendingRequests.get(msg.id ?? "");
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingRequests.delete(msg.id ?? "");
+        if (msg.type === "error") {
+          pending.reject(new Error(msg.error ?? "Unknown EDA error"));
+        } else {
+          pending.resolve(msg.result);
         }
-        break;
       }
+    }
 
-      case "pong":
-        // Heartbeat acknowledged — reset pending flag in next interval tick
-        break;
+    // Pong — heartbeat acknowledged
+    if (msg.type === "pong") {
+      // handled by heartbeat interval
     }
   });
 
@@ -238,7 +235,6 @@ function handleWSSConnection(ws: WebSocket): void {
       edaClients.delete(windowId);
       if (activeEdaWindowId === windowId) activeEdaWindowId = null;
     }
-    // Cancel all pending requests for this window
     for (const [id, pending] of pendingRequests) {
       cancelPending(id, "EDA window disconnected");
     }

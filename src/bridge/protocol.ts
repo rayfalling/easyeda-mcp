@@ -7,11 +7,14 @@ export const REQUEST_TIMEOUT_MS = 30_000;
 export const HEARTBEAT_INTERVAL_MS = 15_000;
 export const HEARTBEAT_TIMEOUT_MS = 5_000;
 
-export type MessageType = "execute" | "result" | "error" | "ping" | "pong" | "handshake";
+export type MessageType = "execute" | "result" | "error" | "ping" | "pong" | "handshake" | "register";
 
 export interface BridgeMessage {
   type: MessageType;
-  id: string;
+  id?: string;
+  service?: string;
+  clientType?: string;
+  windowId?: string;
   code?: string;
   result?: unknown;
   error?: string;
