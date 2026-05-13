@@ -10,12 +10,7 @@ export function generateSchPlaceComponent(params: {
   flip: boolean;
   pageUuid?: string;
 }): string {
-  const pageTarget = params.pageUuid
-    ? `await eda.dmt_Schematic.getSchematicPageInfo("${params.pageUuid}")`
-    : `(await eda.dmt_Schematic.getCurrentSchematicPageInfo())`;
   return buildExecuteBlock(`
-    const page = ${pageTarget};
-    if (!page) throw new Error("No schematic page open");
     const comp = await eda.sch_PrimitiveComponent.create(
       { lx: ${params.lx}, ly: ${params.ly} },
       "${params.libraryUuid}"
@@ -34,11 +29,10 @@ export function generateSchPlaceWire(params: {
   pageUuid?: string;
 }): string {
   return buildExecuteBlock(`
-    const wire = await eda.sch_PrimitiveWire.create(
-      { x: ${params.x1}, y: ${params.y1} },
-      { x: ${params.x2}, y: ${params.y2} }
-    );
-    wire
+    await eda.sch_PrimitiveWire.create({
+      lx: ${params.x1}, ly: ${params.y1},
+      to_lx: ${params.x2}, to_ly: ${params.y2}
+    })
   `);
 }
 
@@ -52,12 +46,12 @@ export function generateSchPlaceNetlabel(params: {
   pageUuid?: string;
 }): string {
   return buildExecuteBlock(`
-    const label = await eda.sch_PrimitiveNetLabel.create(
+    const txt = await eda.sch_PrimitiveText.create(
       { lx: ${params.lx}, ly: ${params.ly} },
       "${params.netName}"
     );
-    if (${params.rotation}) label.setRotation(${params.rotation});
-    label
+    if (${params.rotation}) txt.setRotation(${params.rotation});
+    txt
   `);
 }
 
@@ -72,17 +66,17 @@ export function generateSchPlaceText(params: {
   pageUuid?: string;
 }): string {
   return buildExecuteBlock(`
-    const txt = await eda.sch_PrimitiveString.create(
+    const txt = await eda.sch_PrimitiveText.create(
       { lx: ${params.lx}, ly: ${params.ly} },
       "${params.text}"
     );
-    txt.setTextHeight(${params.height});
+    txt.setFontSize(${params.height});
     if (${params.rotation}) txt.setRotation(${params.rotation});
     txt
   `);
 }
 
-// ─── Select ─────────────────────────────────────────────────────────
+// ─── Select (by nearest primitive to coordinates) ───────────────────
 
 export function generateSchSelect(params: {
   lx: number;
@@ -90,8 +84,27 @@ export function generateSchSelect(params: {
   pageUuid?: string;
 }): string {
   return buildExecuteBlock(`
-    await eda.sch_SelectControl.select(${params.lx}, ${params.ly});
-    { success: true }
+    await eda.sch_SelectControl.clearSelected();
+    // Collect all selectable primitives
+    const modules = [
+      eda.sch_PrimitiveComponent,
+      eda.sch_PrimitiveWire,
+      eda.sch_PrimitiveText,
+    ];
+    let closest = null, closestDist = Infinity;
+    for (const mod of modules) {
+      const all = await mod.getAll();
+      for (const p of all) {
+        const dx = (p.x || p.lx || 0) - ${params.lx};
+        const dy = (p.y || p.ly || 0) - ${params.ly};
+        const dist = dx * dx + dy * dy;
+        if (dist < closestDist) { closestDist = dist; closest = p; }
+      }
+    }
+    if (closest) {
+      await eda.sch_SelectControl.doSelectPrimitives([closest]);
+    }
+    ({ selected: !!closest, distance: Math.sqrt(closestDist) })
   `);
 }
 
@@ -99,12 +112,12 @@ export function generateSchSelect(params: {
 
 export function generateSchGetSelected(params: { pageUuid?: string }): string {
   return buildExecuteBlock(`
-    const selected = await eda.sch_SelectControl.getSelections();
+    const selected = await eda.sch_SelectControl.getSelectedPrimitives();
     selected.map(s => ({
-      id: s.id,
-      type: s.type,
-      x: s.x,
-      y: s.y,
+      primitiveId: s.primitiveId,
+      primitiveType: s.primitiveType,
+      x: s.x || s.lx,
+      y: s.y || s.ly,
     }))
   `);
 }
@@ -113,8 +126,21 @@ export function generateSchGetSelected(params: { pageUuid?: string }): string {
 
 export function generateSchDeleteSelected(params: { pageUuid?: string }): string {
   return buildExecuteBlock(`
-    await eda.sch_SelectControl.deleteSelections();
-    { success: true }
+    const selected = await eda.sch_SelectControl.getSelectedPrimitives();
+    let deleted = 0;
+    for (const s of selected) {
+      try {
+        // Determine the correct delete module by primitiveType
+        const type = s.primitiveType;
+        if (type === 'Component') await eda.sch_PrimitiveComponent.delete(s.primitiveId);
+        else if (type === 'Wire') await eda.sch_PrimitiveWire.delete(s.primitiveId);
+        else if (type === 'Text') await eda.sch_PrimitiveText.delete(s.primitiveId);
+        else await eda.sch_PrimitiveObject.delete(s.primitiveId);
+        deleted++;
+      } catch(e) { /* skip */ }
+    }
+    await eda.sch_SelectControl.clearSelected();
+    ({ deleted, total: selected.length })
   `);
 }
 
@@ -126,11 +152,20 @@ export function generateSchMove(params: {
   pageUuid?: string;
 }): string {
   return buildExecuteBlock(`
-    const items = await eda.sch_SelectControl.getSelections();
-    for (const item of items) {
-      await item.moveBy(${params.dx}, ${params.dy});
+    const selected = await eda.sch_SelectControl.getSelectedPrimitives();
+    let moved = 0;
+    for (const s of selected) {
+      try {
+        const newX = (s.x || s.lx || 0) + ${params.dx};
+        const newY = (s.y || s.ly || 0) + ${params.dy};
+        const type = s.primitiveType;
+        if (type === 'Component') await eda.sch_PrimitiveComponent.modify(s.primitiveId, { lx: newX, ly: newY });
+        else if (type === 'Wire') await eda.sch_PrimitiveWire.modify(s.primitiveId, { lx: newX, ly: newY });
+        else if (type === 'Text') await eda.sch_PrimitiveText.modify(s.primitiveId, { lx: newX, ly: newY });
+        moved++;
+      } catch(e) { /* skip */ }
     }
-    { success: true, movedCount: items.length }
+    ({ moved, total: selected.length })
   `);
 }
 
@@ -139,6 +174,6 @@ export function generateSchMove(params: {
 export function generateSchZoomToFit(params: { pageUuid?: string }): string {
   return buildExecuteBlock(`
     await eda.dmt_EditorControl.zoomToAllPrimitives();
-    { success: true }
+    "zoomed"
   `);
 }

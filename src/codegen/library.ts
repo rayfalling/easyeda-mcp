@@ -7,17 +7,15 @@ export function generateLibrarySearch(params: {
   type: string;
   limit: number;
 }): string {
+  const module = params.type === "footprint" ? "eda.lib_Footprint" : "eda.lib_Device";
   return buildExecuteBlock(`
-    const results = await eda.lib_Search.search("${params.keyword}", {
-      type: "${params.type}",
-      limit: ${params.limit},
-    });
+    const results = await ${module}.search("${params.keyword}", { limit: ${params.limit} });
     results.map(r => ({
-      uuid: r.uuid,
-      name: r.name,
-      package: r.package,
-      description: r.description,
-      type: r.type,
+      uuid: r.uuid || r.deviceUuid,
+      name: r.name || r.deviceName,
+      package: r.package || r.footprintName,
+      description: r.description || "",
+      type: "${params.type}",
     }))
   `);
 }
@@ -28,9 +26,9 @@ export function generateLibraryGetComponentInfo(params: {
   libraryUuid: string;
   type: string;
 }): string {
+  const module = params.type === "footprint" ? "eda.lib_Footprint" : "eda.lib_Device";
   return buildExecuteBlock(`
-    const info = await eda.lib_Library.getComponentInfo("${params.libraryUuid}", "${params.type}");
-    info
+    ${module}.get("${params.libraryUuid}")
   `);
 }
 
@@ -44,25 +42,26 @@ export function generateLibraryPlaceFromSearch(params: {
   rotation: number;
   documentUuid?: string;
 }): string {
-  if (params.type === "component") {
+  if (params.type === "footprint" || params.type === "component") {
+    const module = params.type === "footprint" ? "eda.pcb_PrimitiveComponent" : "eda.sch_PrimitiveComponent";
     return buildExecuteBlock(`
-      const comp = await eda.sch_PrimitiveComponent.create(
+      const obj = await ${module}.create(
         { lx: ${params.lx}, ly: ${params.ly} },
         "${params.libraryUuid}"
       );
-      if (${params.rotation}) comp.setRotation(${params.rotation});
-      comp
-    `);
-  } else {
-    return buildExecuteBlock(`
-      const fp = await eda.pcb_PrimitiveComponent.create(
-        { lx: ${params.lx}, ly: ${params.ly} },
-        "${params.libraryUuid}"
-      );
-      if (${params.rotation}) fp.setRotation(${params.rotation});
-      fp
+      if (${params.rotation}) obj.setRotation(${params.rotation});
+      obj
     `);
   }
+  // symbol — place in schematic
+  return buildExecuteBlock(`
+    const sym = await eda.sch_PrimitiveComponent.create(
+      { lx: ${params.lx}, ly: ${params.ly} },
+      "${params.libraryUuid}"
+    );
+    if (${params.rotation}) sym.setRotation(${params.rotation});
+    sym
+  `);
 }
 
 // ─── Screenshot ────────────────────────────────────────────────────
@@ -72,7 +71,6 @@ export function generateScreenshot(params: { tabId?: string }): string {
   return buildExecuteBlock(`
     const blob = await eda.dmt_EditorControl.getCurrentRenderedAreaImage(${tabParam});
     if (!blob) throw new Error("Failed to capture screenshot");
-    // Return as base64 data URL
     const arr = new Uint8Array(await blob.arrayBuffer());
     let binary = '';
     for (let i = 0; i < arr.length; i++) {

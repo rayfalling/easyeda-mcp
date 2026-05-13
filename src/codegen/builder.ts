@@ -24,12 +24,15 @@ function serializeValue(val: unknown): string {
 
 /**
  * Build a complete executable code string wrapped in try/catch.
- * The code is run as an async IIFE so await can be used.
+ * Supports both single expressions and multi-statement code.
+ * The last expression/statement value is returned as the result.
  */
 export function buildExecuteBlock(code: string): string {
   return `(async () => {
   try {
-    const __result = (${code});
+    const __result = await (async () => {
+${code}
+    })();
     return JSON.stringify({ ok: true, value: __result });
   } catch (e) {
     return JSON.stringify({ ok: false, error: e?.message ?? String(e) });
