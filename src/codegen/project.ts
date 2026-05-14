@@ -1,15 +1,12 @@
-import { buildExecuteBlock, parseExecuteResult } from "./builder.js";
+import { buildExecuteBlock } from "./builder.js";
 
 // ─── Project ───────────────────────────────────────────────────────
 
-export function generateProjectList(params: { teamUuid?: string; folderUuid?: string }): string {
-  const filter = params.teamUuid
-    ? `await eda.dmt_Project.getAllProjectsUuid("${params.teamUuid}", ${params.folderUuid ? `"${params.folderUuid}"` : "undefined"})`
-    : `await eda.dmt_Project.getAllProjectsUuid()`;
+export function generateProjectList(): string {
   return buildExecuteBlock(`
-    const uuids = ${filter};
+    const uuids = await eda.dmt_Project.getAllProjectsUuid();
     const results = [];
-    for (const uuid of uuids) {
+    for (const uuid of uuids.slice(0, 10)) {
       const info = await eda.dmt_Project.getProjectInfo(uuid);
       if (info) results.push(info);
     }
@@ -40,36 +37,29 @@ export function generateProjectCreate(params: {
 
 // ─── Schematic ─────────────────────────────────────────────────────
 
-export function generateSchematicList(params: { projectUuid?: string }): string {
+export function generateSchematicList(): string {
   return buildExecuteBlock(`
     const items = await eda.dmt_Schematic.getAllSchematicsInfo();
-    items.map(i => ({
-      uuid: i.uuid,
-      name: i.name,
-      pageCount: i.schematicPageCount,
-    }))
+    items.map(i => ({ uuid: i.uuid, name: i.name, pageCount: i.schematicPageCount }))
   `);
 }
 
-export function generateSchematicCreate(params: { name?: string; parentUuid?: string }): string {
-  const name = params.name ?? "New Schematic";
+export function generateSchematicCreate(params: { name?: string }): string {
+  const name = params.name ?? "Schematic1";
   return buildExecuteBlock(`await eda.dmt_Schematic.createSchematic("${name}")`);
 }
 
 // ─── PCB ───────────────────────────────────────────────────────────
 
-export function generatePcbList(params: { projectUuid?: string }): string {
+export function generatePcbList(): string {
   return buildExecuteBlock(`
     const items = await eda.dmt_Pcb.getAllPcbsInfo();
-    items.map(i => ({
-      uuid: i.uuid,
-      name: i.name,
-    }))
+    items.map(i => ({ uuid: i.uuid, name: i.name }))
   `);
 }
 
 export function generatePcbCreate(params: { name?: string }): string {
-  const name = params.name ?? "New PCB";
+  const name = params.name ?? "PCB1";
   return buildExecuteBlock(`await eda.dmt_Pcb.createPcb("${name}")`);
 }
 
@@ -79,6 +69,6 @@ export function generateDocumentOpen(params: { documentUuid: string }): string {
   return buildExecuteBlock(`await eda.dmt_EditorControl.openDocument("${params.documentUuid}")`);
 }
 
-export function generateDocumentGetCurrent(params: Record<string, never>): string {
+export function generateDocumentGetCurrent(): string {
   return buildExecuteBlock(`await eda.dmt_SelectControl.getCurrentDocumentInfo()`);
 }

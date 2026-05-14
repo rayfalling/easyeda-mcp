@@ -118,7 +118,7 @@ export function createMCPServer(): McpServer {
     description: "List all projects in the current workspace.",
     inputSchema: ProjectListSchema.shape,
   }, async (params) => {
-    const result = await handleProjectList(params);
+    const result = await handleProjectList();
     return { content: [{ type: "text", text: result }] };
   });
 
@@ -144,7 +144,7 @@ export function createMCPServer(): McpServer {
     description: "List all schematics in the current project.",
     inputSchema: SchematicListSchema.shape,
   }, async (params) => {
-    const result = await handleSchematicList(params);
+    const result = await handleSchematicList();
     return { content: [{ type: "text", text: result }] };
   });
 
@@ -162,7 +162,7 @@ export function createMCPServer(): McpServer {
     description: "List all PCB boards in the current project.",
     inputSchema: PcbListSchema.shape,
   }, async (params) => {
-    const result = await handlePcbList(params);
+    const result = await handlePcbList();
     return { content: [{ type: "text", text: result }] };
   });
 
@@ -238,7 +238,7 @@ export function createMCPServer(): McpServer {
     description: "Get information about currently selected primitives on the schematic.",
     inputSchema: SchGetSelectedSchema.shape,
   }, async (params) => {
-    const result = await handleSchGetSelected(params);
+    const result = await handleSchGetSelected();
     return { content: [{ type: "text", text: result }] };
   });
 
@@ -246,7 +246,7 @@ export function createMCPServer(): McpServer {
     description: "Delete all currently selected primitives on the schematic.",
     inputSchema: SchDeleteSelectedSchema.shape,
   }, async (params) => {
-    const result = await handleSchDeleteSelected(params);
+    const result = await handleSchDeleteSelected();
     return { content: [{ type: "text", text: result }] };
   });
 
@@ -262,7 +262,7 @@ export function createMCPServer(): McpServer {
     description: "Zoom the schematic view to fit all primitives.",
     inputSchema: SchZoomToFitSchema.shape,
   }, async (params) => {
-    const result = await handleSchZoomToFit(params);
+    const result = await handleSchZoomToFit();
     return { content: [{ type: "text", text: result }] };
   });
 
@@ -312,7 +312,7 @@ export function createMCPServer(): McpServer {
     description: "Get information about currently selected primitives on the PCB.",
     inputSchema: PcbGetSelectedSchema.shape,
   }, async (params) => {
-    const result = await handlePcbGetSelected(params);
+    const result = await handlePcbGetSelected();
     return { content: [{ type: "text", text: result }] };
   });
 
@@ -320,7 +320,7 @@ export function createMCPServer(): McpServer {
     description: "Delete all currently selected primitives on the PCB.",
     inputSchema: PcbDeleteSelectedSchema.shape,
   }, async (params) => {
-    const result = await handlePcbDeleteSelected(params);
+    const result = await handlePcbDeleteSelected();
     return { content: [{ type: "text", text: result }] };
   });
 

@@ -5,17 +5,15 @@ import { buildExecuteBlock } from "./builder.js";
 export function generateLibrarySearch(params: {
   keyword: string;
   type: string;
-  limit: number;
+  limit?: number;
 }): string {
   const module = params.type === "footprint" ? "eda.lib_Footprint" : "eda.lib_Device";
   return buildExecuteBlock(`
-    const results = await ${module}.search("${params.keyword}", { limit: ${params.limit} });
-    results.map(r => ({
+    const results = await ${module}.search("${params.keyword}");
+    results.slice(0, ${params.limit ?? 20}).map(r => ({
       uuid: r.uuid || r.deviceUuid,
       name: r.name || r.deviceName,
       package: r.package || r.footprintName,
-      description: r.description || "",
-      type: "${params.type}",
     }))
   `);
 }
@@ -33,35 +31,26 @@ export function generateLibraryGetComponentInfo(params: {
 }
 
 // ─── Place From Search ─────────────────────────────────────────────
+// create(componentRef, x, y, rotation?, mirror?, addIntoBom?, addIntoPcb?)
 
 export function generateLibraryPlaceFromSearch(params: {
   libraryUuid: string;
   type: string;
   lx: number;
   ly: number;
-  rotation: number;
-  documentUuid?: string;
+  rotation?: number;
 }): string {
-  if (params.type === "footprint" || params.type === "component") {
-    const module = params.type === "footprint" ? "eda.pcb_PrimitiveComponent" : "eda.sch_PrimitiveComponent";
+  if (params.type === "footprint") {
     return buildExecuteBlock(`
-      const obj = await ${module}.create(
-        { lx: ${params.lx}, ly: ${params.ly} },
-        "${params.libraryUuid}"
-      );
-      if (${params.rotation}) obj.setRotation(${params.rotation});
-      obj
+      const dev = (await eda.lib_Footprint.search("${params.libraryUuid}"))[0];
+      await eda.pcb_PrimitiveComponent.create(dev, ${params.lx}, ${params.ly}, ${params.rotation ?? 0})
+    `);
+  } else {
+    return buildExecuteBlock(`
+      const dev = (await eda.lib_Device.search("${params.libraryUuid}"))[0];
+      await eda.sch_PrimitiveComponent.create(dev, ${params.lx}, ${params.ly}, ${params.rotation ?? 0})
     `);
   }
-  // symbol — place in schematic
-  return buildExecuteBlock(`
-    const sym = await eda.sch_PrimitiveComponent.create(
-      { lx: ${params.lx}, ly: ${params.ly} },
-      "${params.libraryUuid}"
-    );
-    if (${params.rotation}) sym.setRotation(${params.rotation});
-    sym
-  `);
 }
 
 // ─── Screenshot ────────────────────────────────────────────────────
