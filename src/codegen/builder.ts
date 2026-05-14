@@ -1,43 +1,8 @@
-// JS code string builder helpers
-
-export function js(strings: TemplateStringsArray, ...values: unknown[]): string {
-  return strings.reduce((acc, str, i) => {
-    const val = values[i];
-    if (val === undefined) return acc + str;
-    return acc + str + serializeValue(val);
-  }, "");
-}
-
-function serializeValue(val: unknown): string {
-  if (val === null || val === undefined) return "null";
-  if (typeof val === "string") return JSON.stringify(val);
-  if (typeof val === "number") {
-    // Format numbers with fixed precision to avoid floating point noise
-    return Number.isInteger(val) ? String(val) : val.toFixed(4);
-  }
-  if (typeof val === "boolean") return String(val);
-  if (typeof val === "object") {
-    return JSON.stringify(val, null, 2);
-  }
-  return String(val);
-}
-
 /**
  * Build a complete executable code string wrapped in try/catch.
- * Supports both single expressions and multi-statement code.
- * The last expression/statement value is returned as the result.
  */
 export function buildExecuteBlock(code: string): string {
-  return `(async () => {
-  try {
-    const __result = await (async () => {
-${code}
-    })();
-    return JSON.stringify({ ok: true, value: __result });
-  } catch (e) {
-    return JSON.stringify({ ok: false, error: e?.message ?? String(e) });
-  }
-})()`;
+  return `(async()=>{try{const r=${code};return JSON.stringify({ok:true,value:r});}catch(e){return JSON.stringify({ok:false,error:e?.message??String(e)});}})()`;
 }
 
 /**
